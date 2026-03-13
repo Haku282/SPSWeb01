@@ -49,6 +49,12 @@ const route = require("./route/index");
 const app = express();
 const port = process.env.PORT;
 
+const path = require('path');
+// ... các dòng require khác
+
+// Thêm dòng này bên dưới các dòng app.use khác
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // 1. Cấu hình Store để lưu Session vào MySQL thay vì RAM
 const sessionStore = new MySQLStore({
     clearExpired: true,              // Tự động xóa session hết hạn
