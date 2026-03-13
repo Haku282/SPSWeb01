@@ -19,7 +19,7 @@
     "express-mysql-session": "^3.0.3",
     "express-session": "^1.19.0",
     "jsonwebtoken": "^9.0.3",
-    "mysql2": "^3.18.2",
+    "mysql2": "^3.19.1",
     "path": "^0.12.7"
   },
   "devDependencies": {
