@@ -24,12 +24,13 @@ const Register = () => {
 
     try {
       // Gọi API xuống Backend để lưu vào DB
-      const response = await fetch('http://localhost:8000/api/auth/register', {
+      const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ fullName, username, password }),
+        body: JSON.stringify({ full_name: fullName, username, password }),
       });
 
       const data = await response.json();

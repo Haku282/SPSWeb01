@@ -47,7 +47,8 @@ const db = require('./config/db'); // Đảm bảo đường dẫn tới file co
 const route = require("./route/index");
 
 const app = express();
-const port = process.env.PORT;
+const port = process.env.PORT || 5000;
+const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
 
 const path = require('path');
 // ... các dòng require khác
@@ -60,12 +61,12 @@ const sessionStore = new MySQLStore({
     clearExpired: true,              // Tự động xóa session hết hạn
     checkExpirationInterval: 900000, // 15 phút quét rác một lần (ms)
     expiration: 86400000,            // Session sống tối đa 1 ngày (ms)
-    createDatabaseTable: false       // Bạn đã tạo bảng thủ công nên để false
+    createDatabaseTable: true        // Tự tạo bảng session khi chạy mới trong Docker
 }, db);
 
 // 2. Cấu hình CORS (Cho phép Frontend Vite/React truy cập)
 app.use(cors({
-    origin: 'http://localhost:5173', // Đổi thành port của bạn (ví dụ 5173 nếu dùng Vite)
+    origin: frontendOrigin,
     credentials: true                // BẮT BUỘC: Để gửi/nhận cookie
 }));
 
