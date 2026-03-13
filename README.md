@@ -42,22 +42,22 @@ docker compose down -v
 ```
 
 ### Quick Demo Script (1 minute)
-Chay nhanh tu dau:
+Chạy nhanh từ đầu:
 ```bash
 docker compose down
 docker compose up --build -d
 docker compose ps
 ```
 
-Kiem tra nhanh API sau khi container da `Up`:
+Kiểm tra nhanh API sau khi container đã `Up`:
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/api/v1/inventory-recommendation/from-db
 ```
 
-Mo UI:
+Mở UI:
 - `http://localhost:3000`
-- Dang ky tai khoan moi tai `/register`, sau do dang nhap tai `/login`
+- Đăng ký tài khoản mới tại `/register`, sau đó đăng nhập tại `/login`
 
 ## 3. Chạy thủ công không Docker
 ### Backend
@@ -134,11 +134,11 @@ Risk level:
 	- `SESSION_SECRET`
 	- `FRONTEND_ORIGIN`
 
-## 7. Luu y khi dung XAMPP MySQL
-- DB duoc dung truc tiep tu XAMPP, khong co container DB rieng.
-- Dam bao MySQL trong XAMPP dang chay truoc khi `docker compose up`.
-- Ten DB mac dinh trong compose: `pharmacymanagement`.
-- Neu root trong XAMPP co mat khau, cap nhat lai trong `docker-compose.yml`:
+## 7. Lưu ý khi dùng XAMPP MySQL
+- DB được dùng trực tiếp từ XAMPP, không có container DB riêng.
+- Đảm bảo MySQL trong XAMPP đang chạy trước khi `docker compose up`.
+- Tên DB mặc định trong compose: `pharmacymanagement`.
+- Nếu root trong XAMPP có mật khẩu, cập nhật lại trong `docker-compose.yml`:
 	- `DB_PASS` (backend)
 	- `DATABASE_URL` (ai-service)
 
@@ -146,9 +146,9 @@ Risk level:
 ### `failed to connect to dockerDesktopLinuxEngine`
 - Docker Desktop chưa mở. Hãy mở Docker Desktop rồi chạy lại compose.
 
-### `ECONNREFUSED` den MySQL
-- Kiem tra MySQL cua XAMPP da start chua.
-- Kiem tra user/password/db name trong compose co dung khong.
+### `ECONNREFUSED` đến MySQL
+- Kiểm tra MySQL của XAMPP đã start chưa.
+- Kiểm tra user/password/db name trong compose có đúng không.
 
 ### `POST /api/auth/login 404` trên AI logs
 - Frontend gửi nhầm auth qua `:8000`.
