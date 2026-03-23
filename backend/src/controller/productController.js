@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
+const logActivity = require('../util/history_activity');
 
 // Hàm hỗ trợ xóa file ảnh trong thư mục uploads
 const deleteFile = (fileName) => {
@@ -29,7 +30,6 @@ const productController = {
                 description
             } = req.body;
 
-            // Ưu tiên file từ máy tính (multer), nếu không có thì lấy link từ body
             const image = req.file ? req.file.filename : req.body.image;
 
             const sql = `
@@ -53,7 +53,7 @@ const productController = {
 
             const newProductId = result.insertId;
 
-            // Nếu tạo mới sản phẩm mà có khai báo số lượng nhập ban đầu lớn hơn 0, ta cũng ghi nhận vào lịch sử nhập kho
+            // Nếu có nhập số lượng ban đầu
             if (quantity && Number(quantity) > 0) {
                 const insertHistorySql = `
                     INSERT INTO history_import
@@ -71,13 +71,25 @@ const productController = {
                 ]);
             }
 
+            // ✅ LOG
+            const currentUser = req.session.user;
+            const logDesc = `User ${currentUser.username} created product "${product_name}" (product_id = ${newProductId})`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "CREATE",
+                "product",
+                newProductId,
+                logDesc
+            );
+
             res.status(201).json({
                 message: "Thêm sản phẩm thành công!",
                 product_id: newProductId
             });
 
         } catch (error) {
-            // Nếu lưu DB lỗi mà đã lỡ upload ảnh thì xóa ảnh đó đi để dọn rác
             if (req.file) deleteFile(req.file.filename);
 
             if (error.code === 'ER_DUP_ENTRY') {
@@ -87,7 +99,7 @@ const productController = {
         }
     },
 
-    // 2. READ PRODUCT
+    // 2. READ PRODUCT (không log)
     read: async (req, res) => {
         try {
             const sql = `
@@ -121,16 +133,18 @@ const productController = {
                 description
             } = req.body;
 
-            // Bước A: Lấy thông tin sản phẩm cũ để biết tên file ảnh cũ
-            const [oldProduct] = await db.query("SELECT image FROM product WHERE product_id = ?", [id]);
-            const oldImageName = oldProduct.length > 0 ? oldProduct[0].image : null;
+            const [oldProduct] = await db.query("SELECT * FROM product WHERE product_id = ?", [id]);
 
-            // Bước B: Xác định ảnh mới
-            let finalImage = req.body.image; // Mặc định dùng lại link/tên cũ từ body
+            if (oldProduct.length === 0) {
+                return res.status(404).json({ message: "Không tìm thấy sản phẩm!" });
+            }
+
+            const oldData = oldProduct[0];
+            const oldImageName = oldData.image;
+
+            let finalImage = req.body.image;
             if (req.file) {
-                finalImage = req.file.filename; // Nếu có file mới, dùng file mới
-                
-                // Nếu ảnh cũ là một file (không phải link web) thì xóa file cũ đi cho nhẹ máy
+                finalImage = req.file.filename;
                 if (oldImageName && !oldImageName.startsWith('http')) {
                     deleteFile(oldImageName);
                 }
@@ -151,7 +165,7 @@ const productController = {
                 WHERE product_id = ?
             `;
 
-            const [result] = await db.query(sql, [
+            await db.query(sql, [
                 product_code,
                 product_name,
                 category_id,
@@ -165,9 +179,19 @@ const productController = {
                 id
             ]);
 
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ message: "Không tìm thấy sản phẩm!" });
-            }
+            // ✅ LOG
+            const currentUser = req.session.user;
+
+            const logDesc = `User ${currentUser.username} updated product "${oldData.product_name}" (product_id = ${id})`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "UPDATE",
+                "product",
+                id,
+                logDesc
+            );
 
             res.status(200).json({ message: "Cập nhật sản phẩm thành công!" });
 
@@ -180,34 +204,43 @@ const productController = {
         }
     },
 
-    // 4. DELETE PRODUCT (Hard delete)
+    // 4. DELETE PRODUCT
     delete: async (req, res) => {
         try {
             const { id } = req.params;
-            
-            // Bước 1: Lấy tên file ảnh để chuẩn bị xóa ảnh khỏi ổ cứng
-            const [productRows] = await db.query("SELECT image FROM product WHERE product_id = ?", [id]);
+
+            const [productRows] = await db.query("SELECT * FROM product WHERE product_id = ?", [id]);
             if (productRows.length === 0) {
                 return res.status(404).json({ message: "Sản phẩm không tồn tại!" });
             }
-            const imageName = productRows[0].image;
 
-            // Bước 2: Xóa record khỏi database (Hard delete)
+            const product = productRows[0];
+            const imageName = product.image;
+
             const sql = `DELETE FROM product WHERE product_id = ?`;
-            const [result] = await db.query(sql, [id]);
+            await db.query(sql, [id]);
 
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ message: "Sản phẩm không tồn tại!" });
-            }
-
-            // Bước 3: Chỉ xóa ảnh khi database đã được xóa thành công và file không phải là URL ngoài
             if (imageName && !imageName.startsWith('http')) {
                 deleteFile(imageName);
             }
 
+            // ✅ LOG
+            const currentUser = req.session.user;
+
+            const logDesc = `User ${currentUser.username} deleted product "${product.product_name}" (product_id = ${id})`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "DELETE",
+                "product",
+                id,
+                logDesc
+            );
+
             res.status(200).json({ message: "Đã xóa sản phẩm thành công!" });
+
         } catch (error) {
-            // Nếu có lỗi ràng buộc khoá ngoại, trả về lỗi báo cho FE
             if (error.code === 'ER_ROW_IS_REFERENCED_2') {
                 return res.status(400).json({ message: "Không thể xóa do sản phẩm đã phát sinh lịch sử xuất/nhập kho!" });
             }

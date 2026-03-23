@@ -1,14 +1,14 @@
 const db = require('../config/db');
+const logActivity = require('../util/history_activity');
 
 const history_importController = {
 
     // 1️⃣ CREATE IMPORT BILL
+
     create: async (req, res) => {
-
+        
         const connection = await db.getConnection();
-
         try {
-
             await connection.beginTransaction();
 
             const {
@@ -40,6 +40,8 @@ const history_importController = {
                 description
             ]);
 
+            const historyId = result.insertId;
+
             // 2. tăng số lượng product
             const updateProductSql = `
                 UPDATE product
@@ -52,11 +54,26 @@ const history_importController = {
                 product_id
             ]);
 
+            // ✅ COMMIT trước
             await connection.commit();
+
+            // ✅ LOG ACTIVITY (chỉ khi thành công)
+            const currentUser = req.session.user;
+
+            const logDesc = `User ${currentUser.username} imported ${quantity} units of product "${product_name}" (product_id = ${product_id})`;
+
+            await logActivity(
+                db, // dùng db thường, KHÔNG dùng connection
+                currentUser.id,
+                "CREATE",
+                "history_import",
+                historyId,
+                logDesc
+            );
 
             res.status(201).json({
                 message: "Nhập thuốc thành công!",
-                history_id: result.insertId
+                history_id: historyId
             });
 
         } catch (error) {

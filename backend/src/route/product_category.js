@@ -5,9 +5,9 @@ const auth = require('../middleware/authMiddleware');
 // ai login cũng xem được
 router.get('/', auth.verifyLogin, product_category.read);
 
-// chỉ manager
-router.post('/', auth.verifyLogin, auth.verifyManager, product_category.create);
-router.put('/:id', auth.verifyLogin, auth.verifyManager, product_category.update);
-router.delete('/:id', auth.verifyLogin, auth.verifyManager, product_category.delete);
+// chỉ admin mới tạo, sửa, xóa
+router.post('/', auth.verifyLogin, auth.verifyAdmin, product_category.create);
+router.put('/:id', auth.verifyLogin, auth.verifyAdmin, product_category.update);
+router.delete('/:id', auth.verifyLogin, auth.verifyAdmin, product_category.delete);
 
 module.exports = router;
