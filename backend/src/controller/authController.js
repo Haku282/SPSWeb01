@@ -30,7 +30,10 @@ const authController = {
     login: async (req, res) => {
         try {
             const { username, password } = req.body;
-            const [users] = await db.query('SELECT * FROM user WHERE username = ?', [username]);
+            const [users] = await db.query(
+                'SELECT * FROM user WHERE username = ?', 
+                [username]
+            );
 
             if (users.length === 0) {
                 return res.status(404).json({ message: "Người dùng không tồn tại!" });
@@ -43,6 +46,12 @@ const authController = {
                 return res.status(400).json({ message: "Mật khẩu không chính xác!" });
             }
 
+            // ✅ UPDATE last_login (THÊM Ở ĐÂY)
+            await db.query(
+                'UPDATE user SET last_login = NOW() WHERE user_id = ?',
+                [user.user_id]
+            );
+
             // LƯU VÀO SESSION 
             req.session.user = {
                 id: user.user_id,
@@ -51,17 +60,18 @@ const authController = {
                 full_name: user.full_name
             };
 
-            // Trả về thông tin user để frontend hiển thị (không gửi token nữa)
+            // Trả về thông tin user
             const { password: pw, ...info } = user;
             res.status(200).json({
                 message: "Đăng nhập thành công!",
-                sessionId: req.sessionID, // <--- Show ID session để bạn đối chiếu với Cookie
-                cookieInfo: req.session.cookie, // Show cấu hình cookie
+                sessionId: req.sessionID,
+                cookieInfo: req.session.cookie,
                 user: {
                     username: user.username,
                     role: user.role
                 }
             });
+
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

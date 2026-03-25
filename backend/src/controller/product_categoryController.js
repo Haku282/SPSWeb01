@@ -1,132 +1,139 @@
 const db = require('../config/db');
-
-const product_categoryController = {
-
-    // 1️⃣ CREATE CATEGORY
-    create: async (req, res) => {
-        try {
-
-            const { category_name, description } = req.body;
-
-            const sql = `
-                INSERT INTO product_category
-                (category_name, description)
-                VALUES (?, ?)
-            `;
-
-            const [result] = await db.query(sql, [
-                category_name,
-                description
-            ]);
-
-            res.status(201).json({
-                message: "Thêm danh mục thành công!",
-                category_id: result.insertId
-            });
-
-        } catch (error) {
-
-            if (error.code === 'ER_DUP_ENTRY') {
-                return res.status(400).json({
-                    message: "Tên danh mục đã tồn tại!"
-                });
-            }
-
-            res.status(500).json({ error: error.message });
-        }
-    },
+const logActivity = require('../util/history_activity');
 
 
-    // 2️⃣ READ CATEGORY
+const categoryController = {
+
+    // 🔹 GET ALL (login là xem được)
     read: async (req, res) => {
         try {
-
-            const sql = `
-                SELECT *
-                FROM product_category
-                ORDER BY category_id DESC
-            `;
-
-            const [rows] = await db.query(sql);
-
-            res.status(200).json(rows);
-
+            const [categories] = await db.query("SELECT * FROM product_category");
+            res.status(200).json(categories);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
 
-
-    // 3️⃣ UPDATE CATEGORY
-    update: async (req, res) => {
+    // 🔹 CREATE (Manager only)
+    create: async (req, res) => {
         try {
-
-            const { id } = req.params;
             const { category_name, description } = req.body;
 
-            const sql = `
-                UPDATE product_category
-                SET category_name = ?, description = ?
-                WHERE category_id = ?
-            `;
-
-            const [result] = await db.query(sql, [
-                category_name,
-                description,
-                id
-            ]);
-
-            if (result.affectedRows === 0) {
-                return res.status(404).json({
-                    message: "Không tìm thấy danh mục!"
-                });
+            if (!category_name) {
+                return res.status(400).json({ message: "Thiếu tên danh mục!" });
             }
 
-            res.status(200).json({
-                message: "Cập nhật danh mục thành công!"
-            });
+            const [result] = await db.query(
+                "INSERT INTO product_category (category_name, description) VALUES (?, ?)",
+                [category_name, description]
+            );
+
+            // ✅ LOG ACTIVITY
+            const currentUser = req.session.user;
+            const categoryId = result.insertId;
+
+            const logDesc = `User ${currentUser.username} created category "${category_name}" (category_id = ${categoryId})`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "CREATE",
+                "product_category",
+                categoryId,
+                logDesc
+            );
+
+            res.status(201).json({ message: "Tạo category thành công!" });
 
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
     },
 
-
-    // 4️⃣ DELETE CATEGORY
-    delete: async (req, res) => {
+    // 🔹 UPDATE (Manager only)
+    update: async (req, res) => {
         try {
+            const id = req.params.id;
+            const { category_name, description } = req.body;
 
-            const { id } = req.params;
+            const [category] = await db.query(
+                "SELECT * FROM product_category WHERE category_id = ?",
+                [id]
+            );
 
-            const sql = `
-                DELETE FROM product_category
-                WHERE category_id = ?
-            `;
-
-            const [result] = await db.query(sql, [id]);
-
-            if (result.affectedRows === 0) {
-                return res.status(404).json({
-                    message: "Danh mục không tồn tại!"
-                });
+            if (category.length === 0) {
+                return res.status(404).json({ message: "Category không tồn tại!" });
             }
 
-            res.status(200).json({
-                message: "Xóa danh mục thành công!"
-            });
+            const oldName = category[0].category_name;
+
+            await db.query(
+                "UPDATE product_category SET category_name = ?, description = ? WHERE category_id = ?",
+                [category_name, description, id]
+            );
+
+            // ✅ LOG ACTIVITY
+            const currentUser = req.session.user;
+
+            const logDesc = `User ${currentUser.username} updated category ID = ${id} (from "${oldName}" to "${category_name}")`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "UPDATE",
+                "product_category",
+                id,
+                logDesc
+            );
+
+            res.status(200).json({ message: "Cập nhật thành công!" });
 
         } catch (error) {
-
-            if (error.code === 'ER_ROW_IS_REFERENCED_2') {
-                return res.status(400).json({
-                    message: "Không thể xóa vì danh mục đang được sử dụng trong sản phẩm!"
-                });
-            }
-
             res.status(500).json({ error: error.message });
         }
-    }
+    },
 
+    // 🔹 DELETE (Manager only)
+    delete: async (req, res) => {
+        try {
+            const id = req.params.id;
+
+            const [category] = await db.query(
+                "SELECT * FROM product_category WHERE category_id = ?",
+                [id]
+            );
+
+            if (category.length === 0) {
+                return res.status(404).json({ message: "Category không tồn tại!" });
+            }
+
+            const categoryName = category[0].category_name;
+
+            await db.query(
+                "DELETE FROM product_category WHERE category_id = ?",
+                [id]
+            );
+
+            // ✅ LOG ACTIVITY
+            const currentUser = req.session.user;
+
+            const logDesc = `User ${currentUser.username} deleted category "${categoryName}" (category_id = ${id})`;
+
+            await logActivity(
+                db,
+                currentUser.id,
+                "DELETE",
+                "product_category",
+                id,
+                logDesc
+            );
+
+            res.status(200).json({ message: "Xóa thành công!" });
+
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    },
 };
 
-module.exports = product_categoryController;
+module.exports = categoryController;

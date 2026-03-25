@@ -4,10 +4,10 @@ const Middleware = require('../middleware/authMiddleware');
 const history_importController = require('../controller/history_importController');
 
 // CREATE
-router.post('/', history_importController.create);
+router.post('/',Middleware.verifyLogin , history_importController.create);
 
 // READ
-router.get('/', history_importController.read);
+router.get('/', Middleware.verifyLogin, history_importController.read);
 
 
 module.exports = router;

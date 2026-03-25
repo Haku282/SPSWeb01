@@ -1,22 +1,3 @@
-// const jwt = require('jsonwebtoken');
-
-// const verifyToken = (req, res, next) => {
-//     const authHeader = req.headers.token || req.headers.authorization;
-//     if (authHeader) {
-//         const token = authHeader.split(" ")[1]; // Lấy phần sau chữ "Bearer"
-//         jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-//             if (err) return res.status(403).json("Token không hợp lệ!");
-//             req.user = user; // Lưu thông tin user vào request để dùng ở Controller
-//             next();
-//         });
-//     } else {
-//         return res.status(401).json("Bạn chưa đăng nhập!");
-//     }
-// };
-
-// module.exports = { verifyToken };
-
-
 const authMiddleware = {
     // 1. Kiểm tra đã đăng nhập chưa
     verifyLogin: (req, res, next) => {
@@ -38,16 +19,6 @@ const authMiddleware = {
         }
     },
 
-    // 3. Kiểm tra nhiều Role (Ví dụ: Cả admin và staff đều vào được)
-    verifyAnyRole: (allowedRoles) => {
-        return (req, res, next) => {
-            if (req.session.user && allowedRoles.includes(req.session.user.role)) {
-                next();
-            } else {
-                return res.status(403).json("Bạn không có quyền thực hiện hành động này!");
-            }
-        };
-    }
 };
 
 module.exports = authMiddleware;
