@@ -19,6 +19,8 @@ services:
       context: ./backend
     container_name: smartpharma_backend
     restart: unless-stopped
+    volumes:
+      - ./backend/src:/app/src
     environment:
       PORT: ${PORT:-5000}
       DB_HOST: ${DB_HOST:-host.docker.internal}

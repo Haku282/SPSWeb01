@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom'; 
+import { exportComprehensiveReportToExcel } from '../utils/excelExport';
 
 // Nhận prop toggleChat để mở chatbot và activePage để làm sáng menu
-const Sidebar = ({ toggleChat, activePage }) => {
+const Sidebar = ({ toggleChat, activePage, purchaseHistory = [], importBatches = [], exportTickets = [] }) => {
   const navigate = useNavigate();
   
   const [user, setUser] = useState(() => {
@@ -77,11 +78,28 @@ const Sidebar = ({ toggleChat, activePage }) => {
         <i className="fa fa-box"></i> Quản lý hàng hóa
       </Link>
 
-      {user && user.role === 'admin' && (
-        <Link to="/history" className={`menu-item ${activePage === 'history' ? 'active' : ''}`}>
-          <i className="fa fa-history"></i> Lịch sử
-        </Link>
-      )}
+      {/* --- PHẦN THÊM MỚI: QUẢN LÝ NHẬP KHO --- */}
+      <Link to="/qlnhapkho" className={`menu-item ${activePage === 'qlnhapkho' ? 'active' : ''}`}>
+        <i className="fa fa-file-import"></i> Quản lý nhập kho
+      </Link>
+
+      {/* --- PHẦN THÊM MỚI: QUẢN LÝ XUẤT KHO --- */}
+      <Link to="/qlxuatkho" className={`menu-item ${activePage === 'qlxuatkho' ? 'active' : ''}`}>
+        <i className="fa fa-file-export"></i> Quản lý xuất kho
+      </Link>
+      {/* -------------------------------------- */}
+      
+      <hr style={{ opacity: 0.1, margin: '15px 0' }} />
+
+      {/* NÚT BÁOO CÁO TỔNG KẾT */}
+      <div 
+        onClick={() => exportComprehensiveReportToExcel(purchaseHistory, importBatches, exportTickets)}
+        className="menu-item"
+        style={{ cursor: 'pointer', background: 'rgba(31, 78, 120, 0.1)', borderLeft: '3px solid #1F4E78' }}
+        title="Xuất báo cáo tổng hợp gồm: Lịch sử mua hàng, Phiếu nhập kho, Phiếu xuất kho"
+      >
+        <i className="fa fa-file-excel"></i> Báo cáo tổng kết
+      </div>
       
       <hr style={{ opacity: 0.1, margin: '15px 0' }} />
       

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { exportComprehensiveReportToExcel } from '../utils/excelExport';
 
-const Chatbot = ({ isOpen, toggleChat }) => {
+const Chatbot = ({ isOpen, toggleChat, purchaseHistory = [], importBatches = [], exportTickets = [] }) => {
   const [messages, setMessages] = useState([
     { sender: 'bot', text: 'Chào quản trị viên! Tôi là Trợ lý dược phẩm SPS. Bạn cần tra cứu tồn kho, SKU, hoặc hạn sử dụng sản phẩm nào?' }
   ]);

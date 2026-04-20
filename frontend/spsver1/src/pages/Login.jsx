@@ -28,14 +28,32 @@ const Login = () => {
         // Nếu Backend trả về thành công (HTTP status 200)
         console.log("Đăng nhập thành công:", data);
         setHasError(false);
-        // Lưu tạm thông tin user để Sidebar có thể hiển thị ngay
+        // Lưu thông tin user vào localStorage
         try {
-          if (data.user) localStorage.setItem('sps_user', JSON.stringify(data.user));
-        } catch (e) { /* ignore */ }
-        
-        // DÙNG window.location.href THAY VÌ navigate ĐỂ ÉP TẢI LẠI TRANG
-        // Việc này giúp Sidebar chạy lại và nhận diện được role 'admin'
-        window.location.href = '/qlhh'; 
+          if (data.user) {
+            localStorage.setItem('sps_user', JSON.stringify(data.user));
+            
+            // Chuyển hướng dựa trên role
+            switch (data.user.role) {
+              case 'admin':
+                window.location.href = '/system-admin';
+                break;
+              case 'staff':
+                window.location.href = '/qlhh';
+                break;
+              case 'user':
+                window.location.href = '/user';
+                break;
+              default:
+                // Mặc định chuyển về trang dashboard nếu role không xác định
+                window.location.href = '/dashboard';
+            }
+          }
+        } catch (e) { 
+          console.error("Lỗi khi xử lý thông tin user:", e);
+          setHasError(true);
+          setErrorMsg('Có lỗi xảy ra sau khi đăng nhập.');
+        }
       } else {
         // Nếu sai tài khoản hoặc lỗi (HTTP status 400, 401...)
         setHasError(true);

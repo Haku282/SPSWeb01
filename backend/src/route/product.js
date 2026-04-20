@@ -1,20 +1,18 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const Middleware = require('../middleware/authMiddleware');
 const productController = require('../controller/productController');
-const upload = require('../middleware/upload'); // 1. Import middleware upload bạn đã tạo
 
-// CREATE - Thêm upload.single('image')
-// 'image' phải trùng với tên field bạn gửi từ FormData ở Frontend
-router.post('/', upload.single('image'), productController.create);
+// API Tìm kiếm sản phẩm theo tên (PUBLIC - không cần login)
+router.get('/search', productController.searchProducts);
 
-// READ
-router.get('/', productController.read);
+// READ PRODUCT (PUBLIC - User không cần login để xem)
+router.get('/', productController.getAllProduct);
 
-// UPDATE - Thêm upload.single('image')
-router.put('/:id', upload.single('image'), productController.update);
+// UPDATE PRODUCT (cần login)
+router.put('/:id', Middleware.verifyLogin, productController.updateProduct);
 
-// DELETE
-router.delete('/:id', productController.delete);
+// DELETE PRODUCT (cần login)
+router.delete('/:id', Middleware.verifyLogin, productController.deleteProduct);
 
 module.exports = router;

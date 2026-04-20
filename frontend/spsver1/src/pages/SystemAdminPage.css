@@ -1,0 +1,259 @@
+:root {
+    --admin-bg: #f8f9fa;        /* Light gray background */
+    --sidebar-bg: #ffffff;      /* White sidebar */
+    --card-bg: #ffffff;         /* White cards */
+    --primary-color: #0d6efd;    /* A professional, vibrant blue */
+    --text-dark: #212529;       /* Dark text for high contrast */
+    --text-muted: #6c757d;      /* Muted gray for secondary text */
+    --border-color: #dee2e6;    /* Subtle border color */
+}
+
+.admin-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--admin-bg);
+  font-family: 'Segoe UI', 'Roboto', sans-serif;
+  color: var(--text-dark); /* Change default text color to dark */
+  position: relative;
+}
+
+/* SIDEBAR */
+.admin-sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.admin-sidebar h2 {
+  text-align: center;
+  margin-bottom: 40px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-dark); /* Dark text for title */
+  padding: 0 20px;
+}
+
+.admin-sidebar h2 i {
+    margin-right: 10px;
+    color: var(--primary-color);
+}
+
+.admin-menu {
+  list-style: none;
+  padding: 0;
+}
+
+.admin-menu li {
+  padding: 16px 25px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border-left: 4px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.admin-menu li:hover {
+  background-color: #f1f5f9; /* A very light gray for hover */
+  color: var(--primary-color);
+}
+
+.admin-menu li.active {
+  background-color: #e9f2ff; /* Light blue for active state */
+  border-left-color: var(--primary-color);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.admin-menu li.active i {
+    color: var(--primary-color);
+}
+
+.admin-sidebar .logout-btn {
+    margin-top: auto;
+    padding: 16px 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-weight: 500;
+    color: #d9534f; /* A standard danger red */
+    border-top: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.admin-sidebar .logout-btn:hover {
+    background-color: #fdf2f2;
+    color: #c9302c;
+    padding-left: 30px;
+}
+
+/* MAIN CONTENT */
+.admin-content {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+  margin-left: 260px;
+  min-height: 100vh;
+}
+
+.card {
+  background: var(--card-bg);
+  padding: 25px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 25px;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+/* TABLE */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.admin-table th, .admin-table td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.admin-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.admin-table tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-table tr {
+    transition: background-color 0.2s;
+}
+
+.admin-table tr:hover td {
+    background-color: #f8f9fa;
+}
+
+/* BUTTONS & FORMS */
+.btn {
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+.btn-primary:hover { background-color: #0b5ed7; }
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+.btn-secondary:hover { background-color: #5a6268; }
+
+.btn-danger {
+  background-color: #d9534f;
+  color: white;
+}
+.btn-danger:hover { background-color: #c9302c; }
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.admin-form input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 15px;
+    background: var(--admin-bg);
+    color: var(--text-dark);
+}
+
+.admin-form input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
+}
+
+.status-active {
+    color: #198754;
+    font-weight: bold;
+}
+
+.status-locked {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.status-success {
+    color: #198754;
+}
+
+.status-fail {
+    color: #dc3545;
+}
+
+/* Placeholder for chart */
+.chart-placeholder {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px dashed var(--border-color);
+}

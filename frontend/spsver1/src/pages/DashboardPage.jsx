@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import Chatbot from '../components/Chatbot';
-import SalesChart from '../components/SalesChart';
 
 const DashboardPage = () => {
   // Quản lý trạng thái Chatbot (Tái sử dụng logic cũ)
@@ -18,10 +17,12 @@ const DashboardPage = () => {
     chart: {
       labels: [],
       values: [],
-      label: 'Số lượng phát sinh theo ngày',
+      label: 'Số đơn nhập/xuất theo ngày',
     },
     expiry_alerts: [],
   });
+  const [importCount, setImportCount] = useState(0);
+  const [exportCount, setExportCount] = useState(0);
   const [summaryError, setSummaryError] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -37,44 +38,410 @@ const DashboardPage = () => {
 
   const toggleChat = () => setIsChatOpen(!isChatOpen);
 
-  const fetchData = useCallback(() => {
-    const loadSummary = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/dashboard/summary`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+  // Hàm tính Risk Level
+  const getRiskLevel = (daysLeft) => {
+    if (daysLeft < 0) return 'EXPIRED';
+    if (daysLeft <= 30) return 'HIGH';
+    if (daysLeft <= 90) return 'MEDIUM';
+    return 'LOW';
+  };
+
+  // Hàm lấy dữ liệu từ product_batch_detail
+  const getFefoData = async () => {
+    try {
+      setIsLoadingFefo(true);
+      setFefoError('');
+
+      // Lấy tất cả product_batch_detail có quantity > 0
+      const response = await fetch(`${BACKEND_URL}/api/import_batch`, { credentials: 'include' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const batches = await response.json();
+      const batchArray = Array.isArray(batches) ? batches : batches.data || [];
+
+      const allDetails = [];
+      let priority = 1;
+
+      // Fetch chi tiết từng batch và lấy ra những sản phẩm có qty > 0
+      for (const batch of batchArray) {
+        try {
+          const detailRes = await fetch(`${BACKEND_URL}/api/import_batch/${batch.batch_id}`, {
+            credentials: 'include',
+          });
+          if (!detailRes.ok) continue;
+
+          const details = await detailRes.json();
+          const detailArray = Array.isArray(details) ? details : details.data || [];
+
+          detailArray.forEach((detail) => {
+            // Chỉ lấy những sản phẩm còn hàng (quantity > 0) và có hạn dùng
+            if (detail.quantity > 0 && detail.expiry_date) {
+              const today = new Date();
+              const expiryDate = new Date(detail.expiry_date);
+              const daysLeft = Math.floor((expiryDate - today) / (1000 * 60 * 60 * 24));
+              
+              allDetails.push({
+                priority: priority++,
+                lot_id: detail.batch_detail_id,
+                product_id: detail.product_id,
+                product_name: detail.product_name || 'N/A',
+                quantity: detail.quantity,
+                expiry_date: detail.expiry_date,
+                days_to_expiry: daysLeft,
+                risk_level: getRiskLevel(daysLeft),
+              });
+            }
+          });
+        } catch (err) {
+          console.error(`Lỗi fetch batch ${batch.batch_id}:`, err);
         }
-        const data = await response.json();
-        setSummary(data);
-        setSummaryError('');
-      } catch {
-        setSummaryError('Không thể tải dữ liệu dashboard từ database.');
       }
-    };
 
-    const loadFefo = async () => {
-      try {
-        setIsLoadingFefo(true);
-        setFefoError('');
+      // Sắp xếp theo ngày hết hạn (FEFO - sớm hết hạn trước)
+      allDetails.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
 
-        const response = await fetch(`${AI_URL}/api/v1/inventory-recommendation/from-db`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+      // Gán lại priority theo thứ tự FEFO
+      allDetails.forEach((item, idx) => {
+        item.priority = idx + 1;
+      });
+
+      console.log('FEFO Data:', allDetails);
+      setFefoData(allDetails.slice(0, 10)); // Lấy top 10
+    } catch (err) {
+      console.error('Lỗi getFefoData:', err);
+      setFefoError('Không thể tải dữ liệu FEFO từ kho hàng.');
+      setFefoData([]);
+    } finally {
+      setIsLoadingFefo(false);
+    }
+  };
+
+  // Hàm lấy cảnh báo hạn dùng
+  const getExpiryAlerts = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/import_batch`, { credentials: 'include' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const batches = await response.json();
+      const batchArray = Array.isArray(batches) ? batches : batches.data || [];
+
+      const alerts = [];
+
+      for (const batch of batchArray) {
+        try {
+          const detailRes = await fetch(`${BACKEND_URL}/api/import_batch/${batch.batch_id}`, {
+            credentials: 'include',
+          });
+          if (!detailRes.ok) continue;
+
+          const details = await detailRes.json();
+          const detailArray = Array.isArray(details) ? details : details.data || [];
+
+          detailArray.forEach((detail) => {
+            if (detail.quantity > 0 && detail.expiry_date) {
+              const today = new Date();
+              const expiryDate = new Date(detail.expiry_date);
+              const daysLeft = Math.floor((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+              // Chỉ thêm nếu sắp hết hạn (trong 90 ngày)
+              if (daysLeft <= 90) {
+                alerts.push({
+                  product_id: detail.product_id,
+                  product_name: detail.product_name || 'N/A',
+                  expiry_date: detail.expiry_date,
+                  days_left: daysLeft,
+                  risk_level: getRiskLevel(daysLeft),
+                });
+              }
+            }
+          });
+        } catch (err) {
+          console.error(`Lỗi fetch batch ${batch.batch_id}:`, err);
         }
-
-        const result = await response.json();
-        setFefoData(result.recommendations || []);
-      } catch {
-        setFefoError('Không thể tải dữ liệu FEFO từ AI Service (localhost:8000).');
-        setFefoData([]);
-      } finally {
-        setIsLoadingFefo(false);
       }
-    };
 
-    loadSummary();
-    loadFefo();
-  }, [BACKEND_URL, AI_URL]);
+      // Sắp xếp theo ngày hết hạn gần nhất
+      alerts.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
+
+      return alerts.slice(0, 10); // Top 10 cảnh báo
+    } catch (err) {
+      console.error('Lỗi getExpiryAlerts:', err);
+      return [];
+    }
+  };
+
+  // Hàm lấy dữ liệu biểu đồ NHẬP KHO (số đơn nhập theo ngày)
+  // Logic: 1 batch_id = 1 đơn nhập
+  const getImportChartData = async () => {
+    try {
+      const toLocalYYYYMMDD = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
+      const byDay = new Map();
+
+      console.log('🔄 Đang lấy dữ liệu nhập kho...');
+      try {
+        const importRes = await fetch(`${BACKEND_URL}/api/import_batch`, { credentials: 'include' });
+        console.log('📦 Import API Response Status:', importRes.status);
+        
+        if (importRes.ok) {
+          const imports = await importRes.json();
+          
+          const importArray = Array.isArray(imports) ? imports : imports.data || [];
+          console.log('📦 Total import batches:', importArray.length);
+
+          // 1 batch_id = 1 đơn nhập
+          importArray.forEach((batch) => {
+            if (batch.create_date) {
+              const dateStr = batch.create_date.split(' ')[0]; // yyyy-mm-dd
+              const count = byDay.get(dateStr) || 0;
+              byDay.set(dateStr, count + 1);
+              console.log(`  � Batch ID ${batch.batch_id} - Ngày: ${dateStr} (Total này: ${count + 1})`);
+            }
+          });
+        } else {
+          console.error('❌ Import API response không OK:', importRes.status);
+        }
+      } catch (err) {
+        console.error('❌ Lỗi lấy import batch:', err);
+      }
+
+      // Xây dựng labels và values cho 7 ngày gần nhất
+      const chartLabels = [];
+      const chartValues = [];
+
+      console.log('📊 Import By Day Map:', Object.fromEntries(byDay));
+
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = toLocalYYYYMMDD(d);
+        chartLabels.push(d.toLocaleDateString('vi-VN', { weekday: 'short' }));
+        const value = byDay.get(key) || 0;
+        chartValues.push(value);
+        console.log(`  📈 ${key} (${d.toLocaleDateString('vi-VN', { weekday: 'short' })}): ${value} đơn nhập`);
+      }
+
+      console.log('✅ Import Chart Data:', { chartLabels, chartValues });
+      return { labels: chartLabels, values: chartValues };
+    } catch (err) {
+      console.error('❌ Lỗi getImportChartData:', err);
+      return { labels: [], values: [] };
+    }
+  };
+
+  // Hàm lấy dữ liệu biểu đồ XUẤT KHO (số đơn xuất theo ngày)
+  // Logic: 1 ticket_id = 1 đơn xuất
+  const getExportChartData = async () => {
+    try {
+      const toLocalYYYYMMDD = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
+      const byDay = new Map();
+
+      console.log('🔄 Đang lấy dữ liệu xuất kho...');
+      try {
+        const exportRes = await fetch(`${BACKEND_URL}/api/export_batch`, { credentials: 'include' });
+        console.log('📤 Export API Response Status:', exportRes.status);
+        
+        if (exportRes.ok) {
+          const exports = await exportRes.json();
+          
+          const exportArray = exports.data || [];
+          console.log('📤 Total export tickets:', exportArray.length);
+
+          // 1 ticket_id = 1 đơn xuất
+          exportArray.forEach((ticket) => {
+            if (ticket.created_at) {
+              const dateStr = ticket.created_at.split(' ')[0]; // yyyy-mm-dd
+              const count = byDay.get(dateStr) || 0;
+              byDay.set(dateStr, count + 1);
+              console.log(`  � Ticket ID ${ticket.ticket_id} - Ngày: ${dateStr} (Total này: ${count + 1})`);
+            }
+          });
+        } else {
+          console.error('❌ Export API response không OK:', exportRes.status);
+        }
+      } catch (err) {
+        console.error('❌ Lỗi lấy export batch:', err);
+      }
+
+      // Xây dựng labels và values cho 7 ngày gần nhất
+      const chartLabels = [];
+      const chartValues = [];
+
+      console.log('📊 Export By Day Map:', Object.fromEntries(byDay));
+
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = toLocalYYYYMMDD(d);
+        chartLabels.push(d.toLocaleDateString('vi-VN', { weekday: 'short' }));
+        const value = byDay.get(key) || 0;
+        chartValues.push(value);
+        console.log(`  📈 ${key} (${d.toLocaleDateString('vi-VN', { weekday: 'short' })}): ${value} đơn xuất`);
+      }
+
+      console.log('✅ Export Chart Data:', { chartLabels, chartValues });
+      return { labels: chartLabels, values: chartValues };
+    } catch (err) {
+      console.error('❌ Lỗi getExportChartData:', err);
+      return { labels: [], values: [] };
+    }
+  };
+
+  // Hàm đơn giản: Lấy số lượng đơn nhập (1 batch_id = 1 đơn nhập)
+  const getImportCount = async () => {
+    try {
+      const importRes = await fetch(`${BACKEND_URL}/api/import_batch`, { credentials: 'include' });
+      if (importRes.ok) {
+        const imports = await importRes.json();
+        const importArray = Array.isArray(imports) ? imports : imports.data || [];
+        console.log('📦 Tổng đơn nhập:', importArray.length);
+        return importArray.length;
+      }
+      return 0;
+    } catch (err) {
+      console.error('❌ Lỗi getImportCount:', err);
+      return 0;
+    }
+  };
+
+  // Hàm đơn giản: Lấy số lượng đơn xuất (1 ticket_id = 1 đơn xuất)
+  const getExportCount = async () => {
+    try {
+      const exportRes = await fetch(`${BACKEND_URL}/api/export_batch`, { credentials: 'include' });
+      if (exportRes.ok) {
+        const exports = await exportRes.json();
+        const exportArray = exports.data || [];
+        console.log('📤 Tổng đơn xuất:', exportArray.length);
+        return exportArray.length;
+      }
+      return 0;
+    } catch (err) {
+      console.error('❌ Lỗi getExportCount:', err);
+      return 0;
+    }
+  };
+
+  // Hàm lấy dữ liệu biểu đồ (số đơn nhập/xuất theo ngày) - GIỮ LẠI CHO TƯƠNG THÍCH
+  const getChartData = async () => {
+    try {
+      const toLocalYYYYMMDD = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
+      const byDay = new Map();
+
+      // Lấy dữ liệu nhập từ phiếu nhập (product_batch header)
+      console.log('🔄 Đang lấy dữ liệu nhập kho...');
+      try {
+        const importRes = await fetch(`${BACKEND_URL}/api/import_batch`, { credentials: 'include' });
+        
+        if (importRes.ok) {
+          const imports = await importRes.json();
+          const importArray = Array.isArray(imports) ? imports : imports.data || [];
+          console.log('📦 Import batches:', importArray.length);
+
+          // 1 batch_id = 1 đơn nhập
+          importArray.forEach((batch) => {
+            if (batch.create_date) {
+              const dateStr = batch.create_date.split(' ')[0];
+              const count = byDay.get(dateStr) || 0;
+              byDay.set(dateStr, count + 1);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('❌ Lỗi lấy import batch:', err);
+      }
+
+      // Lấy dữ liệu từ export_batch (phiếu xuất)
+      console.log('🔄 Đang lấy dữ liệu xuất kho...');
+      try {
+        const exportRes = await fetch(`${BACKEND_URL}/api/export_batch`, { credentials: 'include' });
+        
+        if (exportRes.ok) {
+          const exports = await exportRes.json();
+          const exportArray = exports.data || [];
+          console.log('📤 Export tickets:', exportArray.length);
+
+          // 1 ticket_id = 1 đơn xuất
+          exportArray.forEach((ticket) => {
+            if (ticket.created_at) {
+              const dateStr = ticket.created_at.split(' ')[0];
+              const count = byDay.get(dateStr) || 0;
+              byDay.set(dateStr, count + 1);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('❌ Lỗi lấy export batch:', err);
+      }
+
+      // Xây dựng labels và values cho 7 ngày gần nhất
+      const chartLabels = [];
+      const chartValues = [];
+
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = toLocalYYYYMMDD(d);
+        chartLabels.push(d.toLocaleDateString('vi-VN', { weekday: 'short' }));
+        chartValues.push(byDay.get(key) || 0);
+      }
+
+      console.log('✅ Total Chart Data:', { total: chartValues.reduce((a, b) => a + b, 0), chartLabels, chartValues });
+      return { labels: chartLabels, values: chartValues };
+    } catch (err) {
+      console.error('❌ Lỗi getChartData:', err);
+      return { labels: [], values: [] };
+    }
+  };
+
+  // Hàm fetch tất cả dữ liệu
+  const fetchData = useCallback(async () => {
+    try {
+      // Lấy số đơn nhập/xuất
+      const importNum = await getImportCount();
+      const exportNum = await getExportCount();
+      setImportCount(importNum);
+      setExportCount(exportNum);
+
+      // Lấy alerts
+      const alerts = await getExpiryAlerts();
+
+      // Lấy FEFO
+      await getFefoData();
+
+      // Cập nhật summary
+      setSummary((prev) => ({
+        ...prev,
+        chart: {
+          labels: [],
+          values: [],
+          label: 'Số đơn nhập/xuất',
+        },
+        expiry_alerts: alerts,
+      }));
+
+      setSummaryError('');
+    } catch (err) {
+      console.error('Lỗi fetchData:', err);
+      setSummaryError('Lỗi khi tải dữ liệu dashboard.');
+    }
+  }, [BACKEND_URL]);
 
   useEffect(() => {
     fetchData();
@@ -167,28 +534,26 @@ const DashboardPage = () => {
           </button>
         </div>
 
-        {/* Ba thẻ thống kê */}
+        {/* Bốn thẻ thống kê */}
         <div className="stats-grid">
           <div className="stat-card">
-            <h3>Sản phẩm sắp hết hạn</h3>
-            <p style={{ color: 'var(--danger)' }}>{summary.stats.expiring_products}</p>
+            <h3>⏰ Sản phẩm sắp hết hạn</h3>
+            <p style={{ color: 'var(--danger)' }}>{summary.expiry_alerts.length}</p>
           </div>
           <div className="stat-card">
-            <h3>Đơn hàng mới</h3>
-            <p>{summary.stats.new_orders}</p>
+            <h3>📦 FEFO ưu tiên</h3>
+            <p style={{ color: 'var(--success)' }}>{fefoData.length}</p>
           </div>
           <div className="stat-card">
-            <h3>Nhập kho (Tháng)</h3>
-            <p>{Number(summary.stats.monthly_import || 0).toLocaleString('vi-VN')} SP</p>
+            <h3>📥 Đơn nhập</h3>
+            <p style={{ color: '#70AD47' }}>{importCount} đơn</p>
+          </div>
+          <div className="stat-card">
+            <h3>📤 Đơn xuất</h3>
+            <p style={{ color: '#C00000' }}>{exportCount} đơn</p>
           </div>
         </div>
 
-        {/* Biểu đồ */}
-        <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '25px' }}>
-          <h3 style={{ marginBottom: '15px', fontSize: '16px' }}>{summary.chart.label || 'Xu hướng theo tuần'}</h3>
-          {summaryError && <p style={{ color: 'var(--danger)', marginBottom: '10px' }}>{summaryError}</p>}
-          <SalesChart labels={summary.chart.labels} values={summary.chart.values} label={summary.chart.label} />
-        </div>
 
         {/* Hai bảng dữ liệu */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px' }}>

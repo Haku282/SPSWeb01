@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const bcrypt = require('bcrypt');
 const axios = require('axios');
+const { writeLog } = require('../util/history_activity');
+
 
 const notifyAdminLogin = async (employeeName) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -38,7 +40,7 @@ const authController = {
 
             await db.query(
                 'INSERT INTO user (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-                [username, hashedPassword, full_name, role || 'staff']
+                [username, hashedPassword, full_name, role || 'user']
             );
 
             res.status(201).json({ message: "Đăng ký tài khoản thành công!" });
@@ -111,8 +113,10 @@ const authController = {
                     sessionId: req.sessionID, 
                     cookieInfo: req.session.cookie, 
                     user: {
+                        user_id: user.user_id,
                         username: user.username,
-                        role: user.role
+                        role: user.role,
+                        full_name: user.full_name
                     }
                 });
             });
@@ -125,37 +129,25 @@ const authController = {
     // ĐĂNG XUẤT
     logout: async (req, res) => {
         try {
-            // 1. Lấy thông tin user và request TRƯỚC KHI hủy session
+            // 1. Kiểm tra xem session có tồn tại không
             const sessionUser = req.session ? req.session.user : null;
-            const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip || null;
-            const userAgent = req.get('User-Agent') || null;
 
-            // 2. Ghi log LOGOUT vào database
+            // 2. Ghi log LOGOUT vào database (Sử dụng hàm util)
             if (sessionUser) {
-                try {
-                    const [insertResL] = await db.query(
-                        'INSERT INTO history_activity (user_id, action, entity, description, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?)',
-                        [sessionUser.id, 'LOGOUT', 'auth', `User ${sessionUser.username} logged out`, ip, userAgent]
-                    );
-                    console.log('History INSERT (logout) result:', insertResL);
-                } catch (err) {
-                    console.error('Failed to write logout history (with ip/user_agent):', err.message);
-                    // Fallback
-                    try {
-                        const [insertResL2] = await db.query(
-                            'INSERT INTO history_activity (user_id, action, entity, description) VALUES (?, ?, ?, ?)',
-                            [sessionUser.id, 'LOGOUT', 'auth', `User ${sessionUser.username} logged out`]
-                        );
-                        console.log('History INSERT (logout) fallback result:', insertResL2);
-                    } catch (err2) {
-                        console.error('Failed to write logout history (fallback):', err2.message);
-                    }
-                }
+                // Lưu ý: Gọi writeLog TRƯỚC KHI hủy session để lấy được userId từ req
+                await writeLog(
+                    req, 
+                    'LOGOUT', 
+                    'auth', 
+                    sessionUser.id, 
+                    `User ${sessionUser.username} logged out`
+                );
             }
 
-            // 3. Tiến hành hủy session trong Database / Memory
+            // 3. Tiến hành hủy session
             req.session.destroy((err) => {
                 if (err) {
+                    console.error('Lỗi khi hủy session:', err);
                     return res.status(500).json({ message: "Không thể hủy phiên làm việc!" });
                 }
                 
